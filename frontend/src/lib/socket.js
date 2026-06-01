@@ -2,7 +2,7 @@ import { io } from 'socket.io-client'
 
 const token = localStorage.getItem('token')
 
-export const socket = io('http://localhost:3000', {
+export const socket = io('https://realtime-chat-api-weld.vercel.app', {
   auth: {
     token,
   },
