@@ -1,5 +1,6 @@
 const Room = require("../models/Room");
 const Message = require("../models/Message");
+const pusher = require("../lib/pusher");
 
 const createRoom = async (req, res) => {
   try {
@@ -91,10 +92,57 @@ const deleteRoom = async (req, res) => {
   }
 };
 
+const createRoomMessage = async (req, res) => {
+  try {
+    const roomId = req.params.id;
+    const { text } = req.body;
+
+    if (!text || !text.trim()) {
+      return res.status(400).json({ error: "Text not found" });
+    }
+
+    const room = await Room.findById(roomId);
+    if (!room) {
+      return res.status(404).json({ error: "Room not found" });
+    }
+
+    if (room.isPrivate) {
+      const isMember = room.members?.some(
+        (member) => member.toString() === req.user._id.toString(),
+      );
+      const isOwner = room.createdBy?.toString() === req.user._id.toString();
+
+      if (!isMember && !isOwner) {
+        return res.status(403).json({ error: "You are not a member of this room" });
+      }
+    }
+
+    const message = await Message.create({
+      room: roomId,
+      user: req.user._id,
+      text: text.trim(),
+    });
+
+    const populated = await Message.findById(message._id)
+      .populate("user", "username displayName")
+      .lean();
+
+    await pusher.trigger(`private-room-${roomId}`, "new-message", populated);
+
+    return res.status(201).json(populated);
+  } catch (error) {
+    console.error("Error sending message:", error);
+    return res.status(500).json({
+      error: "Error occurred while sending message: " + error.message,
+    });
+  }
+};
+
 module.exports = {
   createRoom,
   getRooms,
   getRoomById,
   getRoomMessages,
   deleteRoom,
+  createRoomMessage,
 };

@@ -6,6 +6,8 @@
 - POST /api/rooms (Auth) - {name, descriptaion? , isPrivate}
 
 
-## Socket.io (الاتصال مع التوكين)
+## Pusher
 
-- join-room - {roomId} => السيرفر هيرد joined-room {roomId}
+- POST /api/pusher/auth (Auth) - {socket_id, channel_name}
+- POST /api/rooms/:id/messages (Auth) - {text}
+- Room updates are published on `private-room-{roomId}` as `new-message`

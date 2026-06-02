@@ -16,6 +16,11 @@ export const RoomService = {
     return res.data
   },
 
+  sendMessage: async (id, text) => {
+    const res = await api.post(`/rooms/${id}/messages`, { text })
+    return res.data
+  },
+
   createRoom: async (data) => {
     const res = await api.post('/rooms', data)
     return res.data

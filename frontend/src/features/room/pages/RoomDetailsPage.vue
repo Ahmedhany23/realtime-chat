@@ -1,6 +1,6 @@
 <script setup>
 import { useAuth } from '@/features/auth/composables/useAuth'
-import { socket } from '@/lib/socket'
+import { createRoomChannel } from '@/lib/pusher'
 import { onMounted, onUnmounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import RoomHeader from '../components/RoomHeader.vue'
@@ -8,6 +8,7 @@ import RoomInput from '../components/RoomInput.vue'
 import RoomMessages from '../components/RoomMessages.vue'
 import RoomSidebar from '../components/RoomSidebar.vue'
 import { useRooms } from '../composable/useRooms'
+import { RoomService } from '../services/room.service'
 
 const route = useRoute()
 const { currentRoom, messages, fetchRoomById, fetchRoomMessages, error, addMessage, loading } =
@@ -16,8 +17,8 @@ const { user } = useAuth()
 
 const roomId = route.params.id
 const messageInput = ref('')
-
 const roomMessages = ref(null)
+let roomSubscription = null
 
 const formatDate = (dateStr) =>
   new Date(dateStr).toLocaleDateString([], {
@@ -35,27 +36,37 @@ onMounted(async () => {
   await fetchRoomById(roomId)
   await fetchRoomMessages(roomId)
 
-  socket.auth = {
-    token: localStorage.getItem('token'),
-  }
-  if (!socket.connected) {
-    socket.connect()
-  }
-  socket.emit('join-room', { roomId })
-  socket.on('new-message', handleNewMessage)
+  roomSubscription = createRoomChannel(roomId)
+  roomSubscription.channel.bind('pusher:subscription_succeeded', () => {
+    console.log('Subscribed to room channel:', roomSubscription.channelName)
+  })
+  roomSubscription.channel.bind('pusher:subscription_error', (status) => {
+    console.error('Room subscription error:', status)
+  })
+  roomSubscription.channel.bind('new-message', handleNewMessage)
 
   roomMessages.value?.scrollToBottom()
 })
 
 onUnmounted(() => {
-  socket.emit('leave-room', roomId)
-  socket.off('new-message', handleNewMessage)
+  if (roomSubscription) {
+    roomSubscription.channel.unbind('new-message', handleNewMessage)
+    roomSubscription.pusher.unsubscribe(roomSubscription.channelName)
+    roomSubscription.pusher.disconnect()
+    roomSubscription = null
+  }
 })
 
 const handleSend = async () => {
   if (!messageInput.value.trim()) return
-  socket.emit('send-message', { roomId, text: messageInput.value.trim() })
-  messageInput.value = ''
+  try {
+    const createdMessage = await RoomService.sendMessage(roomId, messageInput.value.trim())
+    addMessage(createdMessage)
+    roomMessages.value?.scrollToBottom()
+    messageInput.value = ''
+  } catch (error) {
+    console.error('Failed to send message:', error)
+  }
 }
 </script>
 
@@ -64,7 +75,7 @@ const handleSend = async () => {
     v-if="error"
     class="flex h-dvh overflow-hidden bg-background text-foreground items-center justify-center"
   >
-    <h1 class="text-2xl font-bold">Room not found</h1>
+    <h1 class="text-2xl font-bold">{{ error?.message }}</h1>
   </div>
 
   <div v-else class="flex h-dvh overflow-hidden bg-background text-foreground">

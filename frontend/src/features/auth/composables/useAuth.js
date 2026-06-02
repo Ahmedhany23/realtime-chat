@@ -25,7 +25,7 @@ export const useAuth = () => {
     user,
     login,
     register,
-    isAuthenticated: isAuthenticated.value,
+    isAuthenticated,
     loading: computed(() => authStore.loading),
     logout,
     initAuth,
